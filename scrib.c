@@ -46,8 +46,6 @@ struct editorConfig {
 //global struct to store size of terminal
 struct editorConfig E;
 
-//struct termios orig_termios;
-
 
 
 
@@ -214,6 +212,9 @@ int getWindowSize(int *rows, int *cols) {
 
 
 
+
+
+
 /*********************** append buffer **********************/
 
 //to create our own dynamic string which suports append operation, 
@@ -323,6 +324,10 @@ void editorRefreshScreen() {
 
 
 
+
+
+
+
 /**************************** input *******************************/
 
 //move the cursor with a,d,w,s
@@ -392,6 +397,8 @@ void editorProcessKeypress() {
       break;
   }
 }
+
+
 
 
 
