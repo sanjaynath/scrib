@@ -1,12 +1,18 @@
 
 /******************************* includes *******************************/
 
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
+
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -18,15 +24,15 @@
 
 //for cursor movement
 enum editorKey {
-  ARROW_LEFT = 1000,
-  ARROW_RIGHT,
-  ARROW_UP,
-  ARROW_DOWN,
-  DEL_KEY,
-  HOME_KEY,
-  END_KEY,
-  PAGE_UP,
-  PAGE_DOWN
+    ARROW_LEFT = 1000,
+    ARROW_RIGHT,
+    ARROW_UP,
+    ARROW_DOWN,
+    DEL_KEY,
+    HOME_KEY,
+    END_KEY,
+    PAGE_UP,
+    PAGE_DOWN
 };
 
 
@@ -35,16 +41,25 @@ enum editorKey {
 
 /******************************* data *******************************/
 
+typedef struct erow {
+  int size;
+  char *chars;
+} erow;
+
 //to store the size of terminal
 struct editorConfig {
 
-	int cx, cy;  //store cursor position
+    int cx, cy;  //store cursor position
 	int screenrows;
   	int screencols;
+    int numrows;
+    erow *row;  //array of rows to store each row of text
   	struct termios orig_termios;  //to store original terminal attributes
 };
 //global struct to store size of terminal
 struct editorConfig E;
+
+
 
 
 
@@ -61,7 +76,7 @@ struct editorConfig E;
 //error handling - errno variable stores the error
 void die(const char *s) {
 
-	//clear the screen on exit
+    //clear the screen on exit
 	write(STDOUT_FILENO, "\x1b[2J", 4);
   	write(STDOUT_FILENO, "\x1b[H", 3);
 
@@ -121,18 +136,19 @@ int editorReadKey() {
       	die("read");
     }
 
+    //checking for escape sequences
     if (c == '\x1b') {
         char seq[3];
         if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
 
-
+        //checkingfor arrow keys, pageup/pagedn etc as they begin with [
         if (seq[0] == '[') {
             if (seq[1] >= '0' && seq[1] <= '9') {
                 if (read(STDIN_FILENO, &seq[2], 1) != 1) 
                 	return '\x1b';
-                //check third char of input seq for page_up, page_down,home,end
                 if (seq[2] == '~') {
+                    //check second char of input seq for page_up, page_down,home,end
                     switch (seq[1]) {
                         case '1': return HOME_KEY;
                         case '3': return DEL_KEY;
@@ -210,6 +226,62 @@ int getWindowSize(int *rows, int *cols) {
 
 
 
+/******************************* row operations *****************/
+
+//add the line read from input file into a newly created row 
+void editorAppendRow(char *s, size_t len) {
+
+    //increase the size of rows array by 1 to add a new row
+    //i.e. reallocate space equal to number of rows read until now
+    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+
+    //initialise the new row with text read from file
+    int at = E.numrows;
+    E.row[at].size = len;
+    E.row[at].chars = malloc(len + 1);
+    memcpy(E.row[at].chars, s, len);
+    E.row[at].chars[len] = '\0';
+    E.numrows++;
+}
+
+
+
+
+
+
+
+
+
+/*********************** file i/o *************************/
+void editorOpen(char *filename) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) die("fopen");
+    char *line = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+    
+    //keep reading until length of row read is 0, i.e. empty row reached end of file
+    while ((linelen = getline(&line, &linecap, fp)) != -1) {
+
+        //calculate length of row read
+        while (linelen > 0 && (line[linelen - 1] == '\n' ||
+                               line[linelen - 1] == '\r'))
+            linelen--;
+        //add the new row to our existing array of rows
+        editorAppendRow(line, linelen);
+
+    }
+    free(line);
+    fclose(fp);
+}
+
+
+
+
+
+
+
+
 
 
 
@@ -257,36 +329,51 @@ void abFree(struct abuf *ab) {
 //draw tildas at the beginning of every row except welcome msg line
 //no of rows is obtained by getWindowSize and stored in E.screenrows
 void editorDrawRows(struct abuf *ab) {
-  int y;
-  for (y = 0; y < E.screenrows; y++) {
+    int y;
 
+    //go row by row and display each row by appending into ab 
+    for (y = 0; y < E.screenrows; y++) {
+        
+        //drawing a row that does not contain text
+        if (y >= E.numrows) {
 
-  		//Display welcome message
-      	if (y == E.screenrows / 3) {
-      		char welcome[80];
-      		int welcomelen = snprintf(welcome, sizeof(welcome),
-      		  "SCRIB editor -- version %s", SCRIB_VERSION);
-      		
-      		//if terminal window size is not big enough to fit our msg, truncate
-      		if (welcomelen > E.screencols) 
-      			welcomelen = E.screencols;
+  		    //if row no = 1/3 of total rows display welcome message
+      	    if (E.numrows == 0 && y == E.screenrows / 3) {
+      	    	char welcome[80];
+      	    	int welcomelen = snprintf(welcome, sizeof(welcome),
+      	    	  "SCRIB editor -- version %s", SCRIB_VERSION);
+      	    	
+      	    	//if terminal window size is not big enough to fit our msg, truncate
+      	    	if (welcomelen > E.screencols) 
+      	    		welcomelen = E.screencols;
+    
+      	    	//centering the welcome msg
+      	    	int padding = (E.screencols - welcomelen) / 2;
+		        if (padding) {
+		          abAppend(ab, "~", 1);
+		          padding--;
+		        }
+		        while (padding--) 
+		        	abAppend(ab, " ", 1);
+    
+      	    	abAppend(ab, welcome, welcomelen);
+    
+    
+    	    } 
+            else {
+      	    	abAppend(ab, "~", 1);//draw tildas
+    	    }    
+        }
+        else {  //drawing a row that contains text
+            int len = E.row[y].size;
 
-      		//centering the welcome msg
-      		int padding = (E.screencols - welcomelen) / 2;
-		    if (padding) {
-		      abAppend(ab, "~", 1);
-		      padding--;
-		    }
-		    while (padding--) 
-		    	abAppend(ab, " ", 1);
+            //if length of E.row is longer than total coloumns, truncate
+            if (len > E.screencols) len = E.screencols;
 
-
-
-      		abAppend(ab, welcome, welcomelen);
-    	} else {
-      		abAppend(ab, "~", 1);//draw tildas
-    	}
-
+            //write E.row to text buffer for display
+            abAppend(ab, E.row[y].chars, len);
+        }
+    
     	abAppend(ab, "\x1b[K", 3);
     	if (y < E.screenrows - 1) {
       		abAppend(ab, "\r\n", 2);
@@ -294,7 +381,7 @@ void editorDrawRows(struct abuf *ab) {
   	}
 }
 
-//refresh screen
+//refresh screen line by line rather than entire screen
 void editorRefreshScreen() {
     struct abuf ab = ABUF_INIT;
 
@@ -422,7 +509,8 @@ void initEditor() {
 	//initialise cursor position to top left
 	E.cx = 0;
   	E.cy = 0;
-
+    E.numrows = 0;
+    E.row = NULL;
 	//since it is passed by reference, 
 	//the values of E will be initialised with row and coloumn size of terminal
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) 
@@ -430,10 +518,13 @@ void initEditor() {
 }
 
 
-int main() {
+int main(int argc, char *argv[]) {
 
 	enableRawMode();
-	initEditor();	
+	initEditor();
+    if (argc >= 2) {
+        editorOpen(argv[1]);
+    }	
 
 	while (1) {
 
