@@ -50,7 +50,8 @@ typedef struct erow {
 struct editorConfig {
 
     int cx, cy;  //store cursor position
-    int rowoff;
+    int rowoff;  //for vertical scrolling
+    int coloff;  //for horizontal scrolling
 	int screenrows;
   	int screencols;
     int numrows;
@@ -227,6 +228,9 @@ int getWindowSize(int *rows, int *cols) {
 
 
 
+
+
+
 /******************************* row operations *****************/
 
 //add the line read from input file into a newly created row 
@@ -244,6 +248,10 @@ void editorAppendRow(char *s, size_t len) {
     E.row[at].chars[len] = '\0';
     E.numrows++;
 }
+
+
+
+
 
 
 
@@ -328,12 +336,22 @@ void abFree(struct abuf *ab) {
 
 //To enable scrolling when cursor moves out of window
 void editorScroll() {
-  if (E.cy < E.rowoff) {
-    E.rowoff = E.cy;
-  }
-  if (E.cy >= E.rowoff + E.screenrows) {
-    E.rowoff = E.cy - E.screenrows + 1;
-  }
+
+    //vertical scroll
+    if (E.cy < E.rowoff) {
+        E.rowoff = E.cy;
+    }
+    if (E.cy >= E.rowoff + E.screenrows) {
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+    
+    //horizontal scroll
+    if (E.cx < E.coloff) {
+        E.coloff = E.cx;
+    }
+    if (E.cx >= E.coloff + E.screencols) {
+        E.coloff = E.cx - E.screencols + 1;
+    }
 }
 
 
@@ -388,13 +406,14 @@ void editorDrawRows(struct abuf *ab) {
         }
         else {  //drawing a row that contains text
 
-            int len = E.row[filerow].size;
+            int len = E.row[filerow].size - E.coloff;
+            if (len < 0) len = 0;
 
             //if length of E.row is longer than total coloumns, truncate
             if (len > E.screencols) len = E.screencols;
 
             //write E.row to text buffer for display
-            abAppend(ab, E.row[filerow].chars, len);
+            abAppend(ab, &E.row[filerow].chars[E.coloff], len);
         }
     
     	abAppend(ab, "\x1b[K", 3);
@@ -419,7 +438,8 @@ void editorRefreshScreen() {
 
   	//move cursor to position stored in cx,cy
   	char buf[32];
-  	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
+  	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1,
+                                            (E.cx - E.coloff) + 1);
   	abAppend(&ab, buf, strlen(buf));
 
   	abAppend(&ab, "\x1b[?25h", 6); //show the cursor
@@ -446,30 +466,44 @@ void editorRefreshScreen() {
 //move the cursor with a,d,w,s
 void editorMoveCursor(int key) {
 
+    erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+
 	//if conditions prevent cursor from going out of window
 	switch (key) {
 	  case ARROW_LEFT:
 	        if (E.cx != 0) { 
-	            E.cx--;
-	          }
+	           E.cx--;
+	        } else if (E.cy > 0) {
+                E.cy--;
+                E.cx = E.row[E.cy].size;
+            }
 	        break;
 	  case ARROW_RIGHT:
-	        if (E.cx != E.screencols - 1) {
-	          E.cx++;
-	        }
+	        if (row && E.cx < row->size) {
+                E.cx++;
+            } else if (row && E.cx == row->size) {
+                    E.cy++;
+                    E.cx = 0;  
+            } 
 	        break;
 	  case ARROW_UP:
 	        if (E.cy != 0) {
-	          E.cy--;
+	           E.cy--;
 	        }
 	        break;
 	  case ARROW_DOWN:
              //let the cursor go below the window but not more than number of text lines present  
 	        if (E.cy < E.numrows) {  
-	             E.cy++;  
+	           E.cy++;  
              }
 	        break;
 	}
+
+    row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+    int rowlen = row ? row->size : 0;
+    if (E.cx > rowlen) {
+      E.cx = rowlen;
+    }
 }
 
 
@@ -539,6 +573,7 @@ void initEditor() {
     E.numrows = 0;
     E.row = NULL;
     E.rowoff = 0;
+    E.coloff = 0;
 
 	//since it is passed by reference, 
 	//the values of E will be initialised with row and coloumn size of terminal
