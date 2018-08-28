@@ -301,6 +301,41 @@ void editorAppendRow(char *s, size_t len) {
 }
 
 
+//insert a character into a particular position in a row
+void editorRowInsertChar(erow *row, int at, int c) {
+  	if (at < 0 || at > row->size) 
+  			at = row->size;
+  	row->chars = realloc(row->chars, row->size + 2);
+  	memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+  	row->size++;
+  	row->chars[at] = c;
+  	editorUpdateRow(row);
+}
+
+
+
+
+
+
+
+
+
+
+
+/************************* editor operations ********************/
+
+//takes in a char to insert at position of cursor
+void editorInsertChar(int c) {
+
+	//if the cursor is at the end of the file, we need to append a new row
+  	if (E.cy == E.numrows) {
+  	  	editorAppendRow("", 0);
+  	}
+  	editorRowInsertChar(&E.row[E.cy], E.cx, c);
+  	E.cx++;
+}
+
+
 
 
 
@@ -664,8 +699,14 @@ void editorProcessKeypress() {
     case ARROW_DOWN:
     case ARROW_LEFT:
     case ARROW_RIGHT:
-      editorMoveCursor(c);
-      break;
+      	editorMoveCursor(c);
+      	break;
+
+    //for any cases which are not mapped to special keys, 
+    //insert the character into text editor
+    default:
+      	editorInsertChar(c);
+      	break;
   }
 }
 
