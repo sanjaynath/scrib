@@ -24,6 +24,7 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define SCRIB_VERSION "0.0.1"
 #define SCRIB_TAB_STOP 4
+#define KILO_QUIT_TIMES 3
 
 //for cursor movement
 enum editorKey {
@@ -733,80 +734,93 @@ void editorMoveCursor(int key) {
 
 //read a key from terminal using editorReadKey() and handle it
 void editorProcessKeypress() {
-  int c = editorReadKey();
 
-  switch (c) {
+	static int quit_times = KILO_QUIT_TIMES;	
+  	int c = editorReadKey();
+
+  	switch (c) {
 
   	//enter key
-	case '\r':
-		/* TODO */
-		break;
+		case '\r':
+			/* TODO */
+			break;
+	
+		//quit when ctrl-q is pressed 
+		case CTRL_KEY('q'): 
+	
+			//clear the screen and exit
+			//warn if unsaved changes and quit anyway if ctrl+q pressed 3 times
+			if (E.dirty && quit_times > 0) {
+        		editorSetStatusMessage("WARNING!!! File has unsaved changes. "
+          							"Press Ctrl-Q %d more times to quit.", quit_times);
 
-	//quit when ctrl-q is pressed 
-	case CTRL_KEY('q'): 
-
-		//clear the screen and exit
-		write(STDOUT_FILENO, "\x1b[2J", 4);
-		write(STDOUT_FILENO, "\x1b[H", 3);
-		exit(0);
-		break;
-
-	//save file when ctrl+s is pressed
-	case CTRL_KEY('s'):
-      	editorSave();
-      	break;
-
-	case HOME_KEY:
-		E.cx = 0;
-		break;
-
-	case END_KEY:
-		if (E.cy < E.numrows)
-			E.cx = E.row[E.cy].size;
-		break;
-
-	case BACKSPACE://backspace key
-	case CTRL_KEY('h'):
-	case DEL_KEY://delete key
-		/* TODO */
-		break;
-
-	case PAGE_UP:
-	case PAGE_DOWN:
-	{
-
-		if (c == PAGE_UP) {
-			E.cy = E.rowoff;
-		} else if (c == PAGE_DOWN) {
-			E.cy = E.rowoff + E.screenrows - 1;
-		  if (E.cy > E.numrows) E.cy = E.numrows;
+        		//decrement quit_times every time ctrl+q is pressed to keep count until 3
+        		quit_times--;
+        		return;
+      		}
+      		write(STDOUT_FILENO, "\x1b[2J", 4);
+      		write(STDOUT_FILENO, "\x1b[H", 3);
+      		exit(0);
+      		break;
+	
+		//save file when ctrl+s is pressed
+		case CTRL_KEY('s'):
+    	  	editorSave();
+    	  	break;
+	
+		case HOME_KEY:
+			E.cx = 0;
+			break;
+	
+		case END_KEY:
+			if (E.cy < E.numrows)
+				E.cx = E.row[E.cy].size;
+			break;
+	
+		case BACKSPACE://backspace key
+		case CTRL_KEY('h'):
+		case DEL_KEY://delete key
+			/* TODO */
+			break;
+	
+		case PAGE_UP:
+		case PAGE_DOWN:
+		{
+	
+			if (c == PAGE_UP) {
+				E.cy = E.rowoff;
+			} else if (c == PAGE_DOWN) {
+				E.cy = E.rowoff + E.screenrows - 1;
+			  if (E.cy > E.numrows) E.cy = E.numrows;
+			}
+	
+			//move cursor to top or bottom of page with page_up and page_down keys
+			int times = E.screenrows;
+			while (times--)
+				editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
 		}
-
-		//move cursor to top or bottom of page with page_up and page_down keys
-		int times = E.screenrows;
-		while (times--)
-			editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
-	}
-	break;
-
-	//for moving cursor
-	case ARROW_UP:
-	case ARROW_DOWN:
-	case ARROW_LEFT:
-	case ARROW_RIGHT:
-		editorMoveCursor(c);
 		break;
-
-	case CTRL_KEY('l'):
-    case '\x1b':
-      	break;
-
-	//for any cases which are not mapped to special keys, 
-	//insert the character into text editor
-	default:
-		editorInsertChar(c);
-		break;
-  }
+	
+		//for moving cursor
+		case ARROW_UP:
+		case ARROW_DOWN:
+		case ARROW_LEFT:
+		case ARROW_RIGHT:
+			editorMoveCursor(c);
+			break;
+	
+		case CTRL_KEY('l'):
+    	case '\x1b':
+    	  	break;
+	
+		//for any cases which are not mapped to special keys, 
+		//insert the character into text editor
+		default:
+			editorInsertChar(c);
+			break;
+  	}
+  	//reset quit_times back to 3 when user presses any other key except ctrl-q
+  	quit_times = KILO_QUIT_TIMES;
 }
 
 
