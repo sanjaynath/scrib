@@ -53,19 +53,20 @@ typedef struct erow {
 //to store the size of terminal
 struct editorConfig {
 
-    int cx, cy;  //store cursor position
-    int rx;
-    int rowoff;  //for vertical scrolling
-    int coloff;  //for horizontal scrolling
+    int cx, cy;     //store cursor position
+    int rx;		    // for rendering tabs
+    int rowoff;     //for vertical scrolling
+    int coloff;     //for horizontal scrolling
 	int screenrows;
   	int screencols;
     int numrows;
-    erow *row;  //array of rows to store each row of text
-    char *filename;//to store file name
+    erow *row;      //array of rows to store each row of text in editor
+    char *filename; //to store file name
     char statusmsg[80];
     time_t statusmsg_time;
   	struct termios orig_termios;  //to store original terminal attributes
 };
+
 //global struct to store size of terminal
 struct editorConfig E;
 
@@ -194,8 +195,8 @@ int editorReadKey() {
 
 
 //helper function used in getWindowSize 
-//to get the cursor position which is set to bottom left of the terminal 
-//and hence deduce thesize of the terminal window
+//puts the cursor at bottom right of terminal window ,
+//then get the cursor position and hence deduce the size of the terminal window
 int getCursorPosition(int *rows, int *cols) {
   char buf[32];
   unsigned int i = 0;
@@ -223,9 +224,9 @@ int getWindowSize(int *rows, int *cols) {
       	editorReadKey();
       	return getCursorPosition(rows, cols);
     } else {
-      *cols = ws.ws_col;
-      *rows = ws.ws_row;
-      return 0;
+      	*cols = ws.ws_col;
+      	*rows = ws.ws_row;
+      	return 0;
     }
 }
 
@@ -474,7 +475,7 @@ void editorDrawRows(struct abuf *ab) {
         //to enable scrolling and start display from top row visible on scroll
         int filerow = y + E.rowoff;
         
-        //drawing a row that does not contain text
+        //if there is no more text in the file to be displayed
         if (filerow >= E.numrows) {
 
   		    //if row no = 1/3 of total rows display welcome message
@@ -552,11 +553,11 @@ void editorRefreshScreen() {
 
 //status message
 void editorSetStatusMessage(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap);
-  va_end(ap);
-  E.statusmsg_time = time(NULL);
+  	va_list ap;
+  	va_start(ap, fmt);
+  	vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap);
+  	va_end(ap);
+  	E.statusmsg_time = time(NULL);
 }
 
 
@@ -582,28 +583,28 @@ void editorMoveCursor(int key) {
 
 	//if conditions prevent cursor from going out of window
 	switch (key) {
-	  case ARROW_LEFT:
-	        if (E.cx != 0) { 
-	           E.cx--;
-	        } else if (E.cy > 0) {
-                E.cy--;
-                E.cx = E.row[E.cy].size;
-            }
-	        break;
-	  case ARROW_RIGHT:
-	        if (row && E.cx < row->size) {
-                E.cx++;
-            } else if (row && E.cx == row->size) {
-                    E.cy++;
-                    E.cx = 0;  
-            } 
-	        break;
-	  case ARROW_UP:
-	        if (E.cy != 0) {
-	           E.cy--;
-	        }
-	        break;
-	  case ARROW_DOWN:
+	  	case ARROW_LEFT:
+	  	    if (E.cx != 0) { 
+	  	       E.cx--;
+	  	    } else if (E.cy > 0) {
+      	        E.cy--;
+      	        E.cx = E.row[E.cy].size;
+      	    }
+	  	    break;
+	  	case ARROW_RIGHT:
+	  	    if (row && E.cx < row->size) {
+      	        E.cx++;
+      	    } else if (row && E.cx == row->size) {
+      	            E.cy++;
+      	            E.cx = 0;  
+      	    } 
+	  	    break;
+	  	case ARROW_UP:
+	  	    if (E.cy != 0) {
+	  	       E.cy--;
+	  	    }
+	  	    break;
+	  	case ARROW_DOWN:
              //let the cursor go below the window but not more than number of text lines present  
 	        if (E.cy < E.numrows) {  
 	           E.cy++;  
