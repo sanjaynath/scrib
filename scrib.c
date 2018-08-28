@@ -78,6 +78,8 @@ struct editorConfig E;
 
 /************************ prototypes *********************/
 void editorSetStatusMessage(const char *fmt, ...);
+void editorRefreshScreen();
+char *editorPrompt(char *prompt);
 
 
 
@@ -493,8 +495,18 @@ void editorOpen(char *filename) {
 
 //write contents of editor into file and save
 void editorSave() {
-	//if its a new file
-  	if (E.filename == NULL) return;
+
+	//if its a new file, prompt for a name from user
+  	if (E.filename == NULL) {
+  		//if user enters filename and presses enter, save file
+    	E.filename = editorPrompt("Save as: %s (ESC to cancel)");
+    	//if no name is returned, i.e. user pressed esc, abort save
+    	if (E.filename == NULL) {
+      		editorSetStatusMessage("Save aborted");
+      	return;
+    }
+  	}  
+
   	int len;
   	//get content of editor into buf
   	char *buf = editorRowsToString(&len);
@@ -766,6 +778,42 @@ void editorSetStatusMessage(const char *fmt, ...) {
 
 
 /**************************** input *******************************/
+
+
+//to prompt the user for a filename to "Save as.." when no file name was specified
+char *editorPrompt(char *prompt) {
+  size_t bufsize = 128;
+  char *buf = malloc(bufsize);
+  size_t buflen = 0;
+  buf[0] = '\0';
+  while (1) {
+    editorSetStatusMessage(prompt, buf);
+    editorRefreshScreen();
+    int c = editorReadKey();
+
+    //if del key is pressed while entering filename in input prompt
+    if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE) {
+      	if (buflen != 0) buf[--buflen] = '\0';
+    } else if (c == '\x1b') {	//if esc is pressed no need to save file, delete buf and remove status msg
+      	editorSetStatusMessage("");
+      	free(buf);
+      	return NULL;
+    } else if (c == '\r') {	//if enter is pressed, return buff and remove status msg
+      	if (buflen != 0) {
+        	editorSetStatusMessage("");
+        return buf;
+      }
+    } else if (!iscntrl(c) && c < 128) {
+      if (buflen == bufsize - 1) {
+        bufsize *= 2;
+        buf = realloc(buf, bufsize);
+      }
+      buf[buflen++] = c;
+      buf[buflen] = '\0';
+    }
+  }
+}
+
 
 //move the cursor with a,d,w,s
 void editorMoveCursor(int key) {
