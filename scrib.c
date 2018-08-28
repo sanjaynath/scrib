@@ -311,6 +311,25 @@ void editorAppendRow(char *s, size_t len) {
 }
 
 
+//free memory assigned to a row qhen row is deleted
+void editorFreeRow(erow *row) {
+  	free(row->render);
+  	free(row->chars);
+}
+
+//deleting a row when del key is pressed at the beginning of a row
+void editorDelRow(int at) {
+  	
+  	//if cursor is at eof, no need to delete any row
+  	if (at < 0 || at >= E.numrows) 
+  		return;
+  	editorFreeRow(&E.row[at]);
+  	memmove(&E.row[at], &E.row[at + 1], sizeof(erow) * (E.numrows - at - 1));
+  	E.numrows--;
+  	E.dirty++;
+}
+
+
 //insert a character into a particular position in a row
 void editorRowInsertChar(erow *row, int at, int c) {
 	if (at < 0 || at > row->size) 
@@ -321,6 +340,26 @@ void editorRowInsertChar(erow *row, int at, int c) {
 	row->chars[at] = c;
 	editorUpdateRow(row);
 	E.dirty++;
+}
+
+
+//append row to end of previous row when del key is pressed at beginning of a row
+void editorRowAppendString(erow *row, char *s, size_t len) {
+  	row->chars = realloc(row->chars, row->size + len + 1);
+  	memcpy(&row->chars[row->size], s, len);
+  	row->size += len;
+  	row->chars[row->size] = '\0';
+  	editorUpdateRow(row);
+  	E.dirty++;
+}
+
+//delete a character 
+void editorRowDelChar(erow *row, int at) {
+  	if (at < 0 || at >= row->size) return;
+  	memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
+  	row->size--;
+  	editorUpdateRow(row);
+  	E.dirty++;
 }
 
 
@@ -344,6 +383,29 @@ void editorInsertChar(int c) {
 	}
 	editorRowInsertChar(&E.row[E.cy], E.cx, c);
 	E.cx++;
+}
+
+//deletes te char left of cursor
+void editorDelChar() {
+  	
+  	//if cursor is past eof and del key is pressed, then nothing to delete
+  	if (E.cy == E.numrows) 
+  		return;
+
+  	//if cursor is at beginning and del key is pressed, 
+  	//no need to append row to previous
+  	if (E.cx == 0 && E.cy == 0) 
+  		return;
+  	erow *row = &E.row[E.cy];
+  	if (E.cx > 0) {
+  	  	editorRowDelChar(row, E.cx - 1);
+  	  	E.cx--;
+  	} else { //if cursor at beginning of row and del key is pressed
+    	E.cx = E.row[E.cy - 1].size;
+    	editorRowAppendString(&E.row[E.cy - 1], row->chars, row->size);
+    	editorDelRow(E.cy);
+    	E.cy--;
+  	}
 }
 
 
@@ -778,9 +840,11 @@ void editorProcessKeypress() {
 			break;
 	
 		case BACKSPACE://backspace key
-		case CTRL_KEY('h'):
+		case CTRL_KEY('h')://ctrl+h
 		case DEL_KEY://delete key
-			/* TODO */
+			if (c == DEL_KEY) 
+				editorMoveCursor(ARROW_RIGHT);
+      		editorDelChar();
 			break;
 	
 		case PAGE_UP:
