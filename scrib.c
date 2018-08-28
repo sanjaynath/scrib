@@ -289,14 +289,12 @@ void editorUpdateRow(erow *row) {
 
 
 //add the line read from input file into a newly created row 
-void editorAppendRow(char *s, size_t len) {
+void editorInsertRow(int at, char *s, size_t len) {
 
-	//increase the size of rows array by 1 to add a new row
-	//i.e. reallocate space equal to number of rows read until now
-	E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+  	if (at < 0 || at > E.numrows) return;
+  	E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+  	memmove(&E.row[at + 1], &E.row[at], sizeof(erow) * (E.numrows - at));
 
-	//initialise the new row with text read from file
-	int at = E.numrows;
 	E.row[at].size = len;
 	E.row[at].chars = malloc(len + 1);
 	memcpy(E.row[at].chars, s, len);
@@ -379,10 +377,29 @@ void editorInsertChar(int c) {
 
 	//if the cursor is at the end of the file, we need to append a new row
 	if (E.cy == E.numrows) {
-		editorAppendRow("", 0);
+		editorInsertRow(E.numrows, "", 0);
 	}
 	editorRowInsertChar(&E.row[E.cy], E.cx, c);
 	E.cx++;
+}
+
+
+//add new line when enter key is pressed
+void editorInsertNewline() {
+
+	//if cursor is at beginning of row, then just add an empty line
+  	if (E.cx == 0) {
+  	  	editorInsertRow(E.cy, "", 0);
+  	} else {	//if cursor is in middle of row, divide the row and add to next line
+  	  	erow *row = &E.row[E.cy];
+  	  	editorInsertRow(E.cy + 1, &row->chars[E.cx], row->size - E.cx);
+  	  	row = &E.row[E.cy];
+  	  	row->size = E.cx;
+  	  	row->chars[row->size] = '\0';
+  	  	editorUpdateRow(row);
+  	}
+  	E.cy++;
+  	E.cx = 0;
 }
 
 //deletes te char left of cursor
@@ -461,7 +478,7 @@ void editorOpen(char *filename) {
 							   line[linelen - 1] == '\r'))
 			linelen--;
 		//add the new row to our existing array of rows
-		editorAppendRow(line, linelen);
+		editorInsertRow(E.numrows, line, linelen);
 
 	}
 	free(line);
@@ -804,7 +821,7 @@ void editorProcessKeypress() {
 
   	//enter key
 		case '\r':
-			/* TODO */
+			editorInsertNewline();
 			break;
 	
 		//quit when ctrl-q is pressed 
