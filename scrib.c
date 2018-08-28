@@ -44,6 +44,7 @@ enum editorKey {
 
 
 
+
 /******************************* data *******************************/
 
 typedef struct erow {
@@ -73,6 +74,12 @@ struct editorConfig {
 
 //global struct to store size of terminal
 struct editorConfig E;
+
+
+
+
+
+
 
 
 
@@ -148,6 +155,7 @@ void enableRawMode() {
 	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) 
 		die("tcsetattr");
 }
+
 
 //read a character from terminal and return it
 int editorReadKey() {
@@ -372,6 +380,8 @@ void editorRowDelChar(erow *row, int at) {
 
 
 
+
+
 /************************* editor operations ********************/
 
 //takes in a char to insert at position of cursor
@@ -550,7 +560,7 @@ void editorSave() {
 
 
 
-/*********************** append buffer **********************/
+/*********************** append buffer *************************/
 
 //to create our own dynamic string which suports append operation, 
 //since does not support dynamic strings
@@ -994,6 +1004,14 @@ void initEditor() {
 }
 
 
+
+
+
+
+
+
+
+///////////////////////////////// MAIN ////////////////////////////
 int main(int argc, char *argv[]) {
 
 	enableRawMode();
